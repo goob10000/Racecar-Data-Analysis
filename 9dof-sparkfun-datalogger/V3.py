@@ -22,7 +22,29 @@ import polars as pl
 
 degreeToRadian = (2*np.pi)/360
 file = "Runs/Rectangle2x.parquet" #Path to the parquet file
-rawData = pl.read_parquet(file) #Read in trip csv
+file_callibration = "Runs/Orientation.parquet" #Path to orientation parquet file
+rawData = pl.read_parquet(file) #Read in trip parquet
+rawCallibration = pl.read_parquet(file_callibration) #Read in callibration parquet
+
+xA = "xAcc"
+yA = "yAcc"
+zA = "zAcc"
+xG = "xGyro"
+yG = "yGyro"
+zG = "zGyro"
+xB = "xBField"
+yB = "yBField"
+zB = "zBField"
+time = "time"
+
+plt.plot(rawCallibration[xG], label="xGyro")
+plt.plot(rawCallibration[yG], label="yGyro")
+plt.plot(rawCallibration[zG], label="zGyro")
+plt.title("Gyro Data")
+plt.xlabel("Time (s)")
+plt.ylabel("Gyro (deg/s)")
+plt.legend()
+plt.show()
 
 SIFrame = pl.DataFrame(rawData["time"]) #s
 SIFrame.insert_column(1, rawData["xAcc"]/1000*9.81) #N
