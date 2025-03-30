@@ -18,6 +18,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 from threeDplot import *
 import polars as pl
+from integralsAndDerivatives import *
+from fftTools import *
 
 
 degreeToRadian = (2*np.pi)/360
@@ -45,6 +47,54 @@ plt.xlabel("Time (s)")
 plt.ylabel("Gyro (deg/s)")
 plt.legend()
 plt.show()
+
+rawCallibration.insert_column(-1, (rawCallibration[xA].pow(2) + rawCallibration[yA].pow(2) + rawCallibration[zA].pow(2)).sqrt().alias("vA_uncorrected")) # Column that is magnitude of acceleration
+rawCallibration.insert_column(-1, pl.Series(np.convolve(rawCallibration["vA_uncorrected"], np.array([-2, -2, -2, -1, 0, 1, 2, 2, 2]),'same')).alias("vAConvolve"))
+cuts = rawCallibration.filter(pl.col("vAConvolve").abs() > 20)[time] #Look for places where the edge detection is large (above 50)
+for i in range(0, cuts.shape[0] - 1):
+#checks every region bounded by 2 cut locations. If the region is large enough, save it to "regions"
+    if i == 0:
+        regions = []
+    if cuts[i+1] - cuts[i] > 500: #!!!!# 500 for personal IMU, 3 for car IMU
+        regions = [(cuts[i], cuts[i+1], cuts[i+1] - cuts[i])] + regions
+def compile_chunks_and_graph (regions, filter_decision, low_pass_filter_portion): # List, bool, float [0,1]
+    filtered_chunks = pl.DataFrame()
+    medians = pl.DataFrame()
+    for (start, stop, l) in regions:
+    # For every region selected, grab the median and standard deviation
+    # Filter out any values greater than 1 standard deviation from the median
+    # Calculate the new standard deviation without outliers. If the data set varies too much (>1) drop that set
+        chunk = rawCallibration.filter((pl.col(time) >= start) & (pl.col(time) < stop))
+        med = chunk["vA_uncorrected"].median()
+        std = chunk["vA_uncorrected"].std()
+        print(f"std: {std}")
+        print(f"med = {med}, std = {std}")
+        num_stds = 1 #1 for home IMU and FS IMU
+        filtered_chunk = chunk.filter((pl.col("vA_uncorrected") <= med + num_stds*std) & (pl.col("vA_uncorrected") >= med - num_stds*std))
+        std = filtered_chunk["vA_uncorrected"].std()
+        med = filtered_chunk["vA_uncorrected"].median()
+        if std < 0.5: #1 for home IMU and FS IMU
+            if filter_decision:
+                # print(f"shape before is {filtered_chunk.shape}")
+                array = low_pass_filter(filtered_chunk["vA_uncorrected"].to_numpy(), low_pass_filter_portion)
+                # print(f"shape after is {array.shape}")
+                # print(array)
+                series = pl.Series(array).alias("vA_uncorrected")
+                insertion_index = filtered_chunk.get_column_index("vA_uncorrected")
+                filtered_chunk.drop_in_place("vA_uncorrected")
+                filtered_chunk.insert_column(insertion_index, series)
+                # print(filtered_chunk["vA"])
+            plt.scatter(filtered_chunk[time], filtered_chunk["vA_uncorrected"], s=0.5) 
+            filtered_chunks = pl.concat([filtered_chunks, filtered_chunk],how = 'vertical')
+            # print("here")
+            medians = pl.concat([medians, filtered_chunk.filter(pl.col("vA_uncorrected") == (filtered_chunk["vA_uncorrected"].median()))], how = 'vertical')
+    # print("here")
+    plt.show()
+    return (filtered_chunks, medians)
+filtered_chunks, medians = compile_chunks_and_graph(regions, False, 0.95)
+
+
+
 
 SIFrame = pl.DataFrame(rawData["time"]) #s
 SIFrame.insert_column(1, rawData["xAcc"]/1000*9.81) #N

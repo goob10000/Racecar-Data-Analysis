@@ -1,65 +1,7 @@
 ## Implementations of Numerical Integration and Derivation (Not over continuous functions but rather with discrete data)
 ## Created by Nathaniel Platt. Riemann Sum for Integration, 5 point derivative for derivation.
 
-import polars as pl
 import numpy as np
-from scipy.integrate import solve_ivp
-import matplotlib.pyplot as plt
-
-
-# lat = "VDM_GPS_Latitude"
-# long = "VDM_GPS_Longitude"
-
-# df = pl.read_parquet("Parquet/2024-12-02-Part1-100Hz.pq")
-# dfP2 = pl.read_parquet("Parquet/2024-12-02-Part2-100Hz.pq")
-
-
-# df = df[40000:]
-# df.write_parquet("Parquet/2024-12-02-Part1-100Hz.pq")
-
-
-# df.columns
-
-# frT = "TELEM_FR_SUSTRAVEL"
-# flT = "TELEM_FL_SUSTRAVEL"
-# brT = "TELEM_BR_SUSTRAVEL"
-# blT = "TELEM_BL_SUSTRAVEL"
-# lat = "VDM_GPS_Latitude"
-# long = "VDM_GPS_Longitude"
-# course = "VDM_GPS_TRUE_COURSE"
-# xA = "VDM_X_AXIS_ACCELERATION"
-# yA = "VDM_Y_AXIS_ACCELERATION"
-# zA = "VDM_Z_AXIS_ACCELERATION"
-# xG = "VDM_X_AXIS_YAW_RATE"
-# yG = "VDM_Y_AXIS_YAW_RATE"
-# zG = "VDM_Z_AXIS_YAW_RATE"
-# rpm = "SME_TRQSPD_Speed"
-# speed = "VDM_GPS_SPEED"
-# tsC = "TS_Current"
-# time = "Seconds"
-# frT = "TELEM_FR_SUSTRAVEL"
-# flT = "TELEM_FL_SUSTRAVEL"
-# brT = "TELEM_BR_SUSTRAVEL"
-# blT = "TELEM_BL_SUSTRAVEL"
-# lat = "VDM_GPS_Latitude"
-# long = "VDM_GPS_Longitude"
-# course = "VDM_GPS_TRUE_COURSE"
-# xA = "VDM_X_AXIS_ACCELERATION"
-# yA = "VDM_Y_AXIS_ACCELERATION"
-# zA = "VDM_Z_AXIS_ACCELERATION"
-# xG = "VDM_X_AXIS_YAW_RATE"
-# yG = "VDM_Y_AXIS_YAW_RATE"
-# zG = "VDM_Z_AXIS_YAW_RATE"
-# rpm = "SME_TRQSPD_Speed"
-# speed = "VDM_GPS_SPEED"
-# tsC = "TS_Current"
-# xA_mps = "IMU_XAxis_Acceleration_mps"
-# yA_mps = "IMU_YAxis_Acceleration_mps"
-# zA_mps = "IMU_ZAxis_Acceleration_mps"
-# speed_mps = "VMD_GPS_Speed_mps"
-# index = "index"
-
-# rpm_to_mph = 11/40*2*np.pi*0.0001342162*60
 
 def mag (a, b, c):
     # print(f"mag = {np.sqrt(a**2 + b**2 + c**2)}")

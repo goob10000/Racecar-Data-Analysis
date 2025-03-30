@@ -8,7 +8,8 @@ cols = ['time', 'voltage', 'state_of_charge', 'charge_rate', #Renames all the co
         'xGyro', 'yGyro', 'zGyro', 'ISM330.temp', 
        'xBField', 'yBField', 'zBField', 'MMC5983.temp']
 
-df = pl.read_csv("Runs/Rectangle2x.csv",infer_schema_length=10000,ignore_errors=True).with_columns(pl.all().cast(pl.Float32, strict=False))
+df = pl.read_csv("Runs/DataLogger0009.txt",infer_schema_length=10000,ignore_errors=True).with_columns(pl.all().cast(pl.Float32, strict=False))
+df
 df.columns = cols
 
 # df["time"][:100]
@@ -19,4 +20,4 @@ new_df = pl.DataFrame(cs(time))
 new_df.insert_column(0, pl.Series(time).alias("time")) #Insert time column
 new_df.columns = cols
 
-new_df.write_parquet("Runs/Rectangle2x.parquet")
+new_df.write_parquet("Runs/GyroCalibration.parquet")
