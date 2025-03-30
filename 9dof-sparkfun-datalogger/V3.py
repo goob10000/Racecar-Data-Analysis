@@ -3,6 +3,17 @@
 # Started 3/28/2025
 # Goal of this version is to use the DCM with orthonormal correction in the normal matrix form
 
+'''
+Steps:
+- Pass file through cubic splie to create normalized frequency data
+- Filter based on bias and correction matrices
+- Determine orientation based on gravity and initialize rotation matrix
+- Update rotation matrix sequentially
+    - Update angular rates to reflect trapezoid method (value + 1/2*dt*angularRate) to get the new angle
+    - Update matrix via 3 matrix transformation
+    - 
+'''
+
 from matplotlib import pyplot as plt
 import numpy as np
 from threeDplot import *
