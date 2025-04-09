@@ -5,7 +5,7 @@
 
 '''
 Steps:
-- Pass file through cubic splie to create normalized frequency data
+- Pass file through cubic spline to create normalized frequency data
 - Filter based on bias and correction matrices
 - Determine orientation based on gravity and initialize rotation matrix
 - Update rotation matrix sequentially
@@ -15,18 +15,22 @@ Steps:
 '''
 
 from matplotlib import pyplot as plt
+from sklearn.preprocessing import normalize
 import numpy as np
 from threeDplot import *
 import polars as pl
 from integralsAndDerivatives import *
 from fftTools import *
 
+import sys
 
 degreeToRadian = (2*np.pi)/360
 file = "Runs/Rectangle2x.parquet" #Path to the parquet file
-file_callibration = "Runs/Orientation.parquet" #Path to orientation parquet file
+file_Acc_Calibration = "Runs/Orientation.parquet" #Path to orientation parquet file
+file_Gyro_Calibration = "Runs/GyroCalibration.parquet" #Path to orientation parquet file
 rawData = pl.read_parquet(file) #Read in trip parquet
-rawCallibration = pl.read_parquet(file_callibration) #Read in callibration parquet
+rawAccCalibration = pl.read_parquet(file_Acc_Calibration) #Read in Acc Calibration parquet
+rawGyroCalibration = pl.read_parquet(file_Gyro_Calibration) #Read in Gyro Calibration parquet
 
 xA = "xAcc"
 yA = "yAcc"
@@ -39,24 +43,17 @@ yB = "yBField"
 zB = "zBField"
 time = "time"
 
-plt.plot(rawCallibration[xG], label="xGyro")
-plt.plot(rawCallibration[yG], label="yGyro")
-plt.plot(rawCallibration[zG], label="zGyro")
-plt.title("Gyro Data")
-plt.xlabel("Time (s)")
-plt.ylabel("Gyro (deg/s)")
-plt.legend()
-plt.show()
-
-rawCallibration.insert_column(-1, (rawCallibration[xA].pow(2) + rawCallibration[yA].pow(2) + rawCallibration[zA].pow(2)).sqrt().alias("vA_uncorrected")) # Column that is magnitude of acceleration
-rawCallibration.insert_column(-1, pl.Series(np.convolve(rawCallibration["vA_uncorrected"], np.array([-2, -2, -2, -1, 0, 1, 2, 2, 2]),'same')).alias("vAConvolve"))
-cuts = rawCallibration.filter(pl.col("vAConvolve").abs() > 20)[time] #Look for places where the edge detection is large (above 50)
+rawAccCalibration.insert_column(-1, (rawAccCalibration[xA].pow(2) + rawAccCalibration[yA].pow(2) + rawAccCalibration[zA].pow(2)).sqrt().alias("vA_uncorrected")) # Column that is magnitude of acceleration
+rawAccCalibration.insert_column(-1, pl.Series(np.convolve(rawAccCalibration["vA_uncorrected"], np.array([-2, -2, -2, -1, 0, 1, 2, 2, 2]),'same')).alias("vAConvolve"))
+cuts = rawAccCalibration.filter(pl.col("vAConvolve").abs() > 20)[time] #Look for places where the edge detection is large (above 50)
 for i in range(0, cuts.shape[0] - 1):
 #checks every region bounded by 2 cut locations. If the region is large enough, save it to "regions"
     if i == 0:
         regions = []
     if cuts[i+1] - cuts[i] > 500: #!!!!# 500 for personal IMU, 3 for car IMU
         regions = [(cuts[i], cuts[i+1], cuts[i+1] - cuts[i])] + regions
+
+
 def compile_chunks_and_graph (regions, filter_decision, low_pass_filter_portion): # List, bool, float [0,1]
     filtered_chunks = pl.DataFrame()
     medians = pl.DataFrame()
@@ -64,7 +61,7 @@ def compile_chunks_and_graph (regions, filter_decision, low_pass_filter_portion)
     # For every region selected, grab the median and standard deviation
     # Filter out any values greater than 1 standard deviation from the median
     # Calculate the new standard deviation without outliers. If the data set varies too much (>1) drop that set
-        chunk = rawCallibration.filter((pl.col(time) >= start) & (pl.col(time) < stop))
+        chunk = rawAccCalibration.filter((pl.col(time) >= start) & (pl.col(time) < stop))
         med = chunk["vA_uncorrected"].median()
         std = chunk["vA_uncorrected"].std()
         print(f"std: {std}")
@@ -94,6 +91,174 @@ def compile_chunks_and_graph (regions, filter_decision, low_pass_filter_portion)
 filtered_chunks, medians = compile_chunks_and_graph(regions, False, 0.95)
 
 
+plt.plot(in_place_integrate(filtered_chunks[xG]/1000), label="xGyro")
+plt.plot(in_place_integrate(filtered_chunks[yG]/1000), label="yGyro")
+plt.plot(in_place_integrate(filtered_chunks[zG]/1000), label="zGyro")
+plt.title("Integrated Gyro Data from filtered chunks")
+plt.xlabel("Time (s)")
+plt.ylabel("Gyro (deg)")
+plt.legend()
+plt.ylim(-30, 30)
+plt.show()
+
+plt.plot(in_place_integrate(filtered_chunks[xG]/1000 - (filtered_chunks[xG]/1000).mean()), label="xGyro")
+plt.plot(in_place_integrate(filtered_chunks[yG]/1000 - (filtered_chunks[yG]/1000).mean()), label="yGyro")
+plt.plot(in_place_integrate(filtered_chunks[zG]/1000 - (filtered_chunks[zG]/1000).mean()), label="zGyro")
+plt.title("Integrated Gyro Data from filtered chunks")
+plt.xlabel("Time (s)")
+plt.ylabel("Gyro (deg)")
+plt.legend()
+plt.ylim(-30, 30)
+plt.show()
+
+xGBias = 0.0011808715524884387*360
+yGBias = -0.0012930429755828722*360
+zGBias = -0.0008208641842187239*360
+
+plt.plot(rawGyroCalibration[xG], label="xGyro")
+plt.plot(rawGyroCalibration[yG], label="yGyro")
+plt.plot(rawGyroCalibration[zG], label="zGyro")
+plt.title("Raw Gyro Data")
+plt.xlabel("Time (cs)")
+plt.ylabel("Gyro (deg/s)")
+plt.legend()
+plt.show()
+
+plt.plot(in_place_integrate(rawGyroCalibration[xG]/1000 - xGBias), label="xGyro")
+plt.plot(in_place_integrate(rawGyroCalibration[yG]/1000 - yGBias), label="yGyro")
+plt.plot(in_place_integrate(rawGyroCalibration[zG]/1000 - zGBias), label="zGyro")
+plt.title("Integrated Gyro Data")
+plt.xlabel("Time (s)")
+plt.ylabel("Gyro (deg/s)")
+plt.legend()
+plt.show()
+
+# # create a linear transformation matrix that maps from the vector [0,0,1] to the vector [xA, yA, zA] the initial row of rawGyroCalibration
+# xAcc = rawGyroCalibration[xA][0]
+# yAcc = rawGyroCalibration[yA][0]
+# zAcc = rawGyroCalibration[zA][0]
+# vec = np.matrix([[xAcc],[yAcc],[zAcc]])
+# xAcc = xAcc/np.sqrt(xAcc**2 + yAcc**2 + zAcc**2)
+# yAcc = yAcc/np.sqrt(xAcc**2 + yAcc**2 + zAcc**2)
+# zAcc = zAcc/np.sqrt(xAcc**2 + yAcc**2 + zAcc**2)
+# # give me the matrix that maps [0,0,1] to [xAcc, yAcc, zAcc]
+# rMat = np.matrix([[xAcc, yAcc, zAcc], [0, 0, 0], [0, 0, 0]])
+# np.matmul(np.matrix([[0,0,0],[0,0,0],[xAcc,yAcc,zAcc]]), vec)
+# np.sqrt(xAcc**2 + yAcc**2 + zAcc**2)
+
+
+def propagate_attitude(rawGyroCalibration, timeStep=0.01):
+    """
+    Propagates attitude using a Direction Cosine Matrix (DCM) with orthonormalization.
+
+    Args:
+        rawGyroCalibration (DataFrame): Gyroscope and accelerometer data.
+        timeStep (float): Time step for integration.
+
+    Returns:
+        np.ndarray: Output matrix containing transformed acceleration vectors.
+        np.ndarray: Output attitude matrix.
+    """
+    # Initialize variables
+    num_rows = rawGyroCalibration.shape[0] - 1
+    state = np.eye(3)  # Initial state matrix
+    gravityVector = np.matrix([rawGyroCalibration[xA][0], rawGyroCalibration[yA][0], rawGyroCalibration[zA][0]]).T
+    output_matrix = np.zeros((num_rows, 3))
+    output_attitude = np.zeros((num_rows, 3))
+
+    for i in range(num_rows):
+        # Update the state matrix using angular velocity
+        skew_sym = np.matrix([
+            [0, -1 * rawGyroCalibration[i][zG][0] * degreeToRadian, rawGyroCalibration[i][yG][0] * degreeToRadian],
+            [rawGyroCalibration[i][zG][0] * degreeToRadian, 0, -1 * rawGyroCalibration[i][xG][0] * degreeToRadian],
+            [-1 * rawGyroCalibration[i][yG][0] * degreeToRadian, rawGyroCalibration[i][xG][0] * degreeToRadian, 0]
+        ])
+        dm = -1 * np.matmul(skew_sym, state)  # Derivative of the state matrix
+        state = state + dm * timeStep  # Update state matrix
+        state = np.asmatrix(normalize(np.asarray(state), norm='l2', axis=0))  # Orthonormalize
+
+        # Transform acceleration vector
+        xAcc, yAcc, zAcc = rawGyroCalibration[i][xA][0], rawGyroCalibration[i][yA][0], rawGyroCalibration[i][zA][0]
+        vector = np.matrix([xAcc, yAcc, zAcc]).T
+        outputVector = np.matmul(state, vector) - gravityVector
+        output_matrix[i, :] = outputVector.T
+        output_attitude[i, :] = np.matmul(state, np.matrix([[1, 1, 1]]).T).T
+
+    return output_matrix, output_attitude
+
+# Example usage of propagate_attitude
+output_matrix, output_attitude = propagate_attitude(rawGyroCalibration)
+
+plt.plot(output_attitude[:, 0], label="xGyro")
+plt.plot(output_attitude[:, 1], label="yGyro")
+plt.plot(output_attitude[:, 2], label="zGyro")
+plt.title("Integrated Gyro Data")
+plt.xlabel("Time (s)")
+plt.ylabel("Gyro (deg)")
+plt.legend()
+plt.show()
+
+
+## Consider backwards integration for greater stability
+# for i in range(0, rawGyroCalibration.shape[0]-1):
+#     if i == 0: #Start case initializes all variables
+#         xArray, yArray, zArray = np.zeros((rawGyroCalibration.shape[0] - 1,4)), np.zeros((rawGyroCalibration.shape[0] - 1,4)), np.zeros((rawGyroCalibration.shape[0] - 1,4))
+#         timeStep = 0.01
+#         gravityVector = np.matrix([rawGyroCalibration[xA][0], rawGyroCalibration[yA][0], rawGyroCalibration[zA][0]]).T #Place it into a matrix (vector)
+#         state = np.eye(3) # Initial state assumed to be whatever the file started at 
+#         output_matrix = np.zeros((rawGyroCalibration.shape[0]-1,3))
+#         output_attitude = np.zeros((rawGyroCalibration.shape[0]-1,3))
+    
+#     # Update the state matrix
+#     skew_sym = np.matrix([[0, -1*rawGyroCalibration[i][zG][0], rawGyroCalibration[i][yG][0]], [rawGyroCalibration[i][zG][0], 0, -1*rawGyroCalibration[i][xG][0]], [-1*rawGyroCalibration[i][yG][0], rawGyroCalibration[i][xG][0], 0]])
+#     dm = -1*np.matmul(skew_sym,state) # Derivative of the state matrix
+#     state = state + dm*timeStep #Updates the state matrix with the derivative of the state matrix
+#     # Perform orthonormalization using the Gram-Schmidt process
+#     state = np.asmatrix(normalize(np.asarray(state), norm='l2', axis=0)) # Normalize the columns of the state matrix
+#     # u, _, vh = np.linalg.svd(state, full_matrices=True)
+#     # state = np.dot(u, vh)  # Ensure the state matrix is orthonormal
+
+#     xAcc, yAcc, zAcc = rawGyroCalibration[i][xA][0],rawGyroCalibration[i][yA][0],rawGyroCalibration[i][zA][0] #Pulls out acceleration components of this row
+#     vector = np.matrix([xAcc, yAcc, zAcc]).T #Loads them into a matrix and makes it vertical
+#     outputVector = np.matmul(state, vector) - gravityVector #Matrix multiplication works based on Ax = b where A is the transformation matrix for this rotation
+#     output_matrix[i,:] = outputVector.T
+#     output_attitude[i,:] = np.matmul(state, np.matrix([[1,0,0]]).T)[0,:]
+
+
+
+# plt.plot(output_attitude[:,0], label="xGyro")
+# plt.plot(output_attitude[:,1], label="yGyro")
+# plt.title("Integrated Gyro Data")
+# plt.xlabel("Time (s)")
+# plt.ylabel("Gyro (deg/s)")
+# plt.legend()
+# plt.show()
+
+fig = plt.figure()
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+ax.scatter(output_attitude[:,0],output_attitude[:,1],output_attitude[:,2])
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.set_zlabel("z")
+ax.set_label("position")
+plt.show()
+
+gyroOut = pl.DataFrame(output_matrix)
+gyroOut.columns = ["xGyro", "yGyro", "zGyro"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 SIFrame = pl.DataFrame(rawData["time"]) #s
@@ -120,6 +285,7 @@ thetaXDrift = calibratingRegion["xGyro"].mean()
 thetaYDrift = calibratingRegion["yGyro"].mean()
 thetaZDrift = calibratingRegion["zGyro"].mean()
 gravityVector = np.matrix([xG, yG, zG]).T#Place it into a matrix (vector)
+
 
 
 #Maze Frame Creation

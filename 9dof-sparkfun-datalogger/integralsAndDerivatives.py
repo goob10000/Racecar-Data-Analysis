@@ -22,6 +22,22 @@ def in_place_integrate (derivative): #Rimann sum that returns an array of the in
     # print(f"out of integral is {out}")
     return out
 
+def in_place_integrate_trapezoid (derivative): #Rimann sum that returns an array of the intergral at that point
+    if len(derivative.shape) == 1:
+        width = 1
+    else:
+        width = derivative.shape[1]
+    container = derivative[0]
+    out = np.zeros((derivative.shape[0], width))
+    out[0] = container
+    for i in range(1, derivative.shape[0]-1):
+        container += 0.005*(derivative[i] + derivative[i+1])
+        # print(f"added {0.01*derivative[i]} to {container}")
+        out[i] = container
+    out[derivative.shape[0]-1] = container + 0.01*derivative[-1]
+    # print(f"out of integral is {out}")
+    return out
+
 def in_place_integrate_20Hz (derivative): #Rimann sum that returns an array of the intergral at that point
     if len(derivative.shape) == 1:
         width = 1
